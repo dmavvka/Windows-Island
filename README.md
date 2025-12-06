@@ -76,8 +76,8 @@ Download the latest release from [Releases](../../releases):
 
 | Build | Size | Description |
 |-------|------|-------------|
-| `DynamicIsland-PyInstaller.exe` | ~25 MB | Standard build |
-| `DynamicIsland-Nuitka.exe` | ~15 MB | Optimized, faster startup |
+| `DynamicIsland-PyInstaller.zip` | ~70 MB | Standard build |
+| `DynamicIsland-Nuitka.zip` | ~40 MB | Optimized, faster startup |
 
 ### From Source
 
@@ -100,16 +100,18 @@ python dynamic_island.py
 ### PyInstaller
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --noconsole --add-data "Play.png;." --add-data "Pause.png;." --add-data "Previous.png;." --add-data "Next.png;." --icon=icon.ico --name "WindowsIsland" dynamic_island.py
+```
+```bash
+pyinstaller --onefile --noconsole --add-data "Play.png;." --add-data "Pause.png;." --add-data "Previous.png;." --add-data "Next.png;." --add-data "SFPRODISPLAYREGULAR.OTF;." --add-data "SFPRODISPLAYBOLD.OTF;." --add-data "SFPRODISPLAYMEDIUM.OTF;." --icon=icon.ico --name "WindowsIsland" dynamic_island.py
 ```
 
 ### Nuitka (recommended)
 ```bash
 pip install nuitka
-nuitka --standalone --onefile --windows-console-mode=disable --include-data-files=Play.png=Play.png --include-data-files=Pause.png=Pause.png --include-data-files=Previous.png=Previous.png --include-data-files=Next.png=Next.png --windows-icon-from-ico=icon.ico --output-filename=WindowsIsland.exe dynamic_island.py
 ```
-
----
+```bash
+nuitka --onefile --enable-plugin=pyqt5 --windows-console-mode=disable --include-data-files=Play.png=Play.png --include-data-files=Pause.png=Pause.png --include-data-files=Previous.png=Previous.png --include-data-files=Next.png=Next.png --include-data-files=SFPRODISPLAYREGULAR.OTF=SFPRODISPLAYREGULAR.OTF --include-data-files=SFPRODISPLAYBOLD.OTF=SFPRODISPLAYBOLD.OTF --include-data-files=SFPRODISPLAYMEDIUM.OTF=SFPRODISPLAYMEDIUM.OTF --windows-icon-from-ico=icon.ico --output-filename=WindowsIsland.exe dynamic_island.py
+```
 
 ## 📋 Dependencies
 
