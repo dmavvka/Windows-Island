@@ -139,7 +139,7 @@ Right-click tray icon → **Settings**
 
 ---
 
-## 📎 Control
+## 📎 Controls
 
 | Action | Result |
 |--------|--------|
