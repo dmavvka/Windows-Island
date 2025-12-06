@@ -137,8 +137,6 @@ Right-click tray icon → **Settings**
 
 ---
 
----
-
 ## 📎 Controls
 
 | Action | Result |
