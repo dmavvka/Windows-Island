@@ -137,6 +137,21 @@ Right-click tray icon → **Settings**
 
 ---
 
+---
+
+## 📎 Control
+
+| Action | Result |
+|--------|--------|
+| **Click** (compact) | Expand island |
+| **Click** (expanded) | Open source app |
+| **Double-click** | Configurable (play/pause, next, etc.) |
+| **Long press** | Expand island |
+| **Right-click island** | Hide island |
+| **Right-click tray** | Settings / Exit |
+
+---
+
 ## 🌐 Languages
 
 - English
