@@ -8,6 +8,12 @@ import json
 import os
 import winreg
 import numpy as np
+
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
 from PyQt5.QtWidgets import (QApplication, QWidget, QSystemTrayIcon, QMenu, QAction,
                              QVBoxLayout, QHBoxLayout, QLabel, QSlider, QCheckBox, 
                              QPushButton, QTabWidget, QFrame, QSpinBox, QComboBox,
@@ -38,8 +44,6 @@ class AudioAnalyzer:
         self.running = False
         self.bands = [0.0] * 12
         self.lock = threading.Lock()
-        # 12 частотных диапазонов для поддержки до 12 полосок
-        # Расширен первый диапазон для лучшего отклика на басы
         self.freq_ranges = [
             (20, 80), (80, 160), (160, 300), (300, 500),
             (500, 800), (800, 1200), (1200, 2000), (2000, 3500),
@@ -82,10 +86,8 @@ class AudioAnalyzer:
                     fft = np.abs(np.fft.rfft(audio_data))
                     freqs = np.fft.rfftfreq(len(audio_data), 1.0 / rate)
                     
-                    # Нормализуем FFT
                     fft = fft / len(audio_data)
                     
-                    # Компенсация для разных частотных диапазонов
                     band_multipliers = [0.8, 1.0, 1.3, 1.6, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
                     
                     new_bands = []
@@ -94,7 +96,6 @@ class AudioAnalyzer:
                         if mask.any():
                             val = np.mean(fft[mask])
                             multiplier = band_multipliers[idx] if idx < len(band_multipliers) else 1.0
-                            # Линейная шкала с порогом
                             level = min(1.0, max(0.0, val * multiplier * 20.0))
                         else:
                             level = 0.0
@@ -119,7 +120,6 @@ class DynamicIsland(QWidget):
     def __init__(self):
         super().__init__()
         
-        # Загружаем конфиг
         self.config = load_config()
         
         self.base_width = self.config.get('idle_width', 150)
@@ -133,7 +133,7 @@ class DynamicIsland(QWidget):
         self.is_expanded = False
         self.album_art = None
         self.checking_media = False
-        self.eq_bars = [0.1] * 12  # Максимум 12 полосок
+        self.eq_bars = [0.1] * 12
         self.show_equalizer = self.config.get('show_equalizer', True)
         self.eq_color_from_art = self.config.get('eq_color_from_art', True)
         self.text_animation_enabled = self.config.get('text_animation', True)
@@ -143,8 +143,8 @@ class DynamicIsland(QWidget):
         self.bounce_enabled = self.config.get('bounce_effect', True)
         self.animation_speed = self.config.get('animation_speed', 100) / 100.0
         self.corner_radius = self.config.get('corner_radius', 20)
-        self.corner_radius_current = self.corner_radius  # Текущее значение для анимации
-        self.corner_radius_target = self.corner_radius   # Целевое значение
+        self.corner_radius_current = self.corner_radius
+        self.corner_radius_target = self.corner_radius
         self.compact_corner_radius_current = self.config.get('compact_corner_radius', 20)
         self.compact_corner_radius_target = self.config.get('compact_corner_radius', 20)
         self.click_to_open_app = self.config.get('click_to_open_app', True)
@@ -159,18 +159,15 @@ class DynamicIsland(QWidget):
         self.autohide = self.config.get('autohide', False)
         self.monitor_index = self.config.get('monitor', 0)
         
-        # Для анимации typewriter
         self.typewriter_index = 0
         self.typewriter_timer = 0
         
-        # Применяем масштаб
-        # size_scale применяется только к compact режиму
         scale = self.config.get('size_scale', 100) / 100.0
         idle_width = self.config.get('idle_width', 150)
         media_width = self.config.get('media_width', 200)
         self.base_width = int(idle_width * scale)
         self.base_height = int(40 * scale)
-        self.expanded_width = 330  # Фиксированный размер плеера
+        self.expanded_width = 330
         self.expanded_height = 200
         self.media_width = int(media_width * scale)
         self.eq_color_top = QColor(255, 255, 255)
@@ -189,14 +186,13 @@ class DynamicIsland(QWidget):
         self.old_artist = ""
         self.text_anim_progress = 1.0
         self.text_animating = False
-        # Скролл текста
         self.title_scroll_offset = 0.0
         self.artist_scroll_offset = 0.0
         self.title_needs_scroll = False
         self.artist_needs_scroll = False
-        self.scroll_pause_start = 0.0  # Время начала паузы
-        self.scroll_start_time = 0.0  # Время начала скролла
-        self.title_scrolling = False  # Флаг активного скролла
+        self.scroll_pause_start = 0.0
+        self.scroll_start_time = 0.0
+        self.title_scrolling = False
         self.artist_scrolling = False
         self._title_text_width = 0
         self._artist_text_width = 0
@@ -227,16 +223,15 @@ class DynamicIsland(QWidget):
         self.next_offset = 0.0
         self.next_animating = False
         
-        self.icon_play = QPixmap("Play.png")
-        self.icon_pause = QPixmap("Pause.png")
-        self.icon_prev = QPixmap("Previous.png")
-        self.icon_next = QPixmap("Next.png")
+        self.icon_play = QPixmap(resource_path("Play.png"))
+        self.icon_pause = QPixmap(resource_path("Pause.png"))
+        self.icon_prev = QPixmap(resource_path("Previous.png"))
+        self.icon_next = QPixmap(resource_path("Next.png"))
         
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         screens = QApplication.screens()
         screen = screens[self.monitor_index].geometry() if self.monitor_index < len(screens) else QApplication.primaryScreen().geometry()
-        # Начинаем за пределами экрана (сверху)
         self.setGeometry(screen.x() + (screen.width() - self.base_width) // 2, screen.y() - self.base_height - 20, self.base_width, self.base_height)
         
         self.animation = QPropertyAnimation(self, b"geometry")
@@ -250,7 +245,6 @@ class DynamicIsland(QWidget):
         self.expanding = False
         self.media_updated.connect(self.on_media_updated)
         
-        # Анимация появления при запуске
         self._startup_animation_done = False
         QTimer.singleShot(100, self._animate_startup)
         
@@ -267,7 +261,6 @@ class DynamicIsland(QWidget):
         self.flip_timer.start(16)
     
     def _animate_startup(self):
-        """Анимация появления острова сверху при запуске"""
         if self._startup_animation_done:
             return
         self._startup_animation_done = True
@@ -400,22 +393,19 @@ class DynamicIsland(QWidget):
             
             painter.setOpacity(1.0)
         
-        # Прогресс-бар в compact режиме
         if progress < 0.3 and self.show_progress_bar and self.has_media_session and self.track_duration > 0:
             bar_opacity = 1.0 - (progress / 0.3)
             painter.setOpacity(bar_opacity * 0.6)
             
             bar_height = 2
-            bar_y = h - 2  # Опустил ниже (было h - 4)
-            bar_margin = 14  # Увеличил отступы ещё на 2px (было 12)
+            bar_y = h - 2
+            bar_margin = 14 
             bar_width = w - bar_margin * 2
             
-            # Фон
             painter.setBrush(QBrush(QColor(60, 60, 60)))
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(bar_margin, bar_y, bar_width, bar_height, 1, 1)
             
-            # Прогресс
             track_progress = self.track_position / self.track_duration if self.track_duration > 0 else 0
             painter.setBrush(QBrush(QColor(255, 255, 255)))
             painter.drawRoundedRect(bar_margin, bar_y, int(bar_width * track_progress), bar_height, 1, 1)
@@ -447,41 +437,39 @@ class DynamicIsland(QWidget):
             t = self.text_anim_progress
             style = self.text_animation_style
             
-            if style == 0:  # Slide (скольжение)
+            if style == 0:
                 old_offset = -20 * t
                 old_alpha = int(alpha * (1 - t))
                 new_offset = 20 * (1 - t)
                 new_alpha = int(alpha * t)
                 self._draw_text_slide(painter, text_x, top_offset, text_width, old_title, old_artist, title, artist, old_offset, new_offset, old_alpha, new_alpha, alpha)
             
-            elif style == 1:  # Fade (затухание)
+            elif style == 1:
                 old_alpha = int(alpha * (1 - t))
                 new_alpha = int(alpha * t)
                 self._draw_text_fade(painter, text_x, top_offset, text_width, old_title, old_artist, title, artist, old_alpha, new_alpha, alpha)
             
-            elif style == 2:  # Typewriter (печатная машинка)
+            elif style == 2:
                 chars_to_show = int(len(title) * t)
                 visible_title = title[:chars_to_show]
                 chars_artist = int(len(artist) * max(0, t - 0.3) / 0.7) if t > 0.3 else 0
                 visible_artist = artist[:chars_artist]
                 self._draw_text_typewriter(painter, text_x, top_offset, text_width, visible_title, visible_artist, alpha)
             
-            elif style == 3:  # Wave (волна)
+            elif style == 3:
                 self._draw_text_wave(painter, text_x, top_offset, text_width, title, artist, t, alpha)
             
-            elif style == 4:  # Blur (размытие) - упрощённая версия через прозрачность
+            elif style == 4:
                 scale = 0.8 + 0.2 * t
                 blur_alpha = int(alpha * t)
                 self._draw_text_blur(painter, text_x, top_offset, text_width, title, artist, scale, blur_alpha, alpha)
         else:
-            # Рисуем текст со скроллом если не вмещается
             self._draw_scrolling_text(painter, text_x, top_offset, text_width, title, artist, alpha)
         
         if alpha > 200:
             self.draw_slider_and_controls(painter)
     
     def _draw_text_slide(self, painter, text_x, top_offset, text_width, old_title, old_artist, title, artist, old_offset, new_offset, old_alpha, new_alpha, alpha):
-        """Анимация скольжения - старый текст уходит вверх, новый появляется снизу"""
         if old_alpha > 0:
             painter.setPen(QPen(QColor(255, 255, 255, old_alpha)))
             font = QFont("SF Pro Display", 12)
@@ -511,7 +499,6 @@ class DynamicIsland(QWidget):
             painter.drawText(text_x, int(top_offset + 25 + new_offset), text_width, 20, Qt.AlignLeft | Qt.AlignVCenter, artist)
     
     def _draw_text_fade(self, painter, text_x, top_offset, text_width, old_title, old_artist, title, artist, old_alpha, new_alpha, alpha):
-        """Анимация затухания - плавная смена прозрачности"""
         if old_alpha > 0:
             painter.setPen(QPen(QColor(255, 255, 255, old_alpha)))
             font = QFont("SF Pro Display", 12)
@@ -539,7 +526,6 @@ class DynamicIsland(QWidget):
             painter.drawText(text_x, top_offset + 25, text_width, 20, Qt.AlignLeft | Qt.AlignVCenter, artist)
     
     def _draw_text_typewriter(self, painter, text_x, top_offset, text_width, title, artist, alpha):
-        """Анимация печатной машинки - текст появляется по буквам"""
         painter.setPen(QPen(QColor(255, 255, 255, alpha)))
         font = QFont("SF Pro Display", 12)
         font.setBold(True)
@@ -553,7 +539,6 @@ class DynamicIsland(QWidget):
         painter.drawText(text_x, top_offset + 25, text_width, 20, Qt.AlignLeft | Qt.AlignVCenter, artist)
     
     def _draw_text_wave(self, painter, text_x, top_offset, text_width, title, artist, t, alpha):
-        """Анимация волны - буквы появляются волной с разной высотой"""
         font = QFont("SF Pro Display", 12)
         font.setBold(True)
         painter.setFont(font)
@@ -581,7 +566,6 @@ class DynamicIsland(QWidget):
             x_pos += painter.fontMetrics().horizontalAdvance(char)
     
     def _draw_text_blur(self, painter, text_x, top_offset, text_width, title, artist, scale, blur_alpha, alpha):
-        """Анимация размытия - текст появляется с эффектом масштабирования"""
         painter.save()
         
         center_x = text_x + text_width / 2
@@ -614,41 +598,35 @@ class DynamicIsland(QWidget):
         painter.restore()
     
     def _draw_scrolling_text(self, painter, text_x, top_offset, text_width, title, artist, alpha):
-        """Рисует текст со скроллом если не вмещается"""
-        # Название трека
         font_title = QFont("SF Pro Display", 12)
         font_title.setBold(True)
         painter.setFont(font_title)
         title_text_width = painter.fontMetrics().horizontalAdvance(title)
-        self._title_text_width = title_text_width  # Сохраняем для update
+        self._title_text_width = title_text_width
         
-        # Артист
         font_artist = QFont("SF Pro Display", 10)
         font_artist.setBold(True)
         
         painter.save()
         painter.setClipRect(text_x, top_offset, text_width, 50)
         
-        # Рисуем название
         painter.setFont(font_title)
         painter.setPen(QPen(QColor(255, 255, 255, alpha)))
         
-        gap = 60  # Промежуток между повторами текста
+        gap = 60
         
         if title_text_width > text_width:
             self.title_needs_scroll = True
             scroll_x = text_x - self.title_scroll_offset
             painter.drawText(int(scroll_x), top_offset, title_text_width + gap, 25, Qt.AlignLeft | Qt.AlignVCenter, title)
-            # Дублируем текст для бесшовного скролла
             painter.drawText(int(scroll_x + title_text_width + gap), top_offset, title_text_width + gap, 25, Qt.AlignLeft | Qt.AlignVCenter, title)
         else:
             self.title_needs_scroll = False
             painter.drawText(text_x, top_offset, text_width, 25, Qt.AlignLeft | Qt.AlignVCenter, title)
         
-        # Рисуем артиста
         painter.setFont(font_artist)
         artist_text_width = painter.fontMetrics().horizontalAdvance(artist)
-        self._artist_text_width = artist_text_width  # Сохраняем для update
+        self._artist_text_width = artist_text_width
         painter.setPen(QPen(QColor(180, 180, 180, alpha)))
         
         if artist_text_width > text_width:
@@ -833,7 +811,6 @@ class DynamicIsland(QWidget):
         target_pause = 0.0 if self.is_media_playing else 1.0
         self.pause_progress += (target_pause - self.pause_progress) * 0.15
         
-        # Плавная анимация закруглений
         self.corner_radius_current += (self.corner_radius_target - self.corner_radius_current) * 0.15
         self.compact_corner_radius_current += (self.compact_corner_radius_target - self.compact_corner_radius_current) * 0.15
         
@@ -841,7 +818,6 @@ class DynamicIsland(QWidget):
             bands = self.audio_analyzer.get_bands()
             sensitivity = self.eq_sensitivity / 100.0
             for i in range(min(len(bands), len(self.eq_bars))):
-                # Применяем чувствительность
                 adjusted_band = bands[i] * sensitivity
                 self.eq_bars[i] += (adjusted_band - self.eq_bars[i]) * 0.4
                 self.eq_bars[i] = max(0.1, min(1.0, self.eq_bars[i]))
@@ -861,24 +837,20 @@ class DynamicIsland(QWidget):
                 self.text_anim_progress = 1.0
                 self.text_animating = False
         
-        # Обновление скролла текста в expanded режиме (time-based)
         if self.is_expanded and not self.text_animating:
             current_time = time.time()
-            scroll_speed = 30.0  # Пикселей в секунду
-            pause_duration = 2.5  # Секунд паузы
+            scroll_speed = 30.0
+            pause_duration = 2.5
             gap = 60
             
             if self.title_needs_scroll:
                 if not self.title_scrolling:
-                    # Начинаем паузу
                     if self.scroll_pause_start == 0:
                         self.scroll_pause_start = current_time
-                    # Проверяем прошла ли пауза
                     if current_time - self.scroll_pause_start >= pause_duration:
                         self.title_scrolling = True
                         self.scroll_start_time = current_time
                 else:
-                    # Плавный скролл на основе времени
                     elapsed = current_time - self.scroll_start_time
                     title_width = self._title_text_width if self._title_text_width > 0 else 200
                     max_scroll = title_width + gap
@@ -1049,13 +1021,11 @@ class DynamicIsland(QWidget):
             self.is_media_playing = is_playing
             if not self.is_expanded:
                 if has_session:
-                    # Показываем остров если был скрыт
                     if self.is_hidden and self.autohide:
                         self.show_island()
                     else:
                         self.animate_to(self.media_width, self.base_height)
                 else:
-                    # Скрываем остров если включён autohide
                     if self.autohide and not self.is_hidden:
                         self.hide_island()
                     else:
@@ -1069,7 +1039,6 @@ class DynamicIsland(QWidget):
         self.update()
 
     def get_current_screen(self):
-        """Получить текущий монитор по индексу"""
         screens = QApplication.screens()
         if self.monitor_index < len(screens):
             return screens[self.monitor_index]
@@ -1196,13 +1165,11 @@ class DynamicIsland(QWidget):
     
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton and not self.is_expanded:
-            # Отменяем отложенное открытие приложения
             self._pending_open_app = False
             
-            # double_click_action: 0=nothing, 1=expand, 2=play/pause, 3=next
             action = self.double_click_action
             if action == 0:
-                pass  # Ничего не делать
+                pass
             elif action == 1:
                 if self.has_media_session:
                     self.toggle_expanded()
@@ -1231,8 +1198,6 @@ class DynamicIsland(QWidget):
                 self.dragging_slider = False
             if self.press_timer and self.press_timer.isActive():
                 self.press_timer.stop()
-                # Используем таймер для отложенного открытия приложения
-                # чтобы двойной клик успел отменить его
                 if self.has_media_session and self.click_to_open_app and not self.is_expanded:
                     self._pending_open_app = True
                     QTimer.singleShot(250, self._check_open_app)
@@ -1243,7 +1208,6 @@ class DynamicIsland(QWidget):
         event.accept()
     
     def _check_open_app(self):
-        """Открыть приложение если не было двойного клика"""
         if getattr(self, '_pending_open_app', False):
             self._pending_open_app = False
             self.open_media_app()
@@ -1344,7 +1308,6 @@ class DynamicIsland(QWidget):
         if not self.is_expanded and self.has_media_session:
             self.toggle_expanded()
         else:
-            # Возвращаем к нормальному размеру если нет медиа
             target_w = self.media_width if (self.is_media_playing or self.has_media_session) else self.base_width
             self.animate_to(target_w, self.base_height)
 
@@ -1379,9 +1342,9 @@ class DynamicIsland(QWidget):
         self.bounce_enabled = config.get('bounce_effect', True)
         self.animation_speed = config.get('animation_speed', 100) / 100.0
         self.corner_radius = config.get('corner_radius', 20)
-        self.corner_radius_target = self.corner_radius  # Устанавливаем target для плавной анимации
+        self.corner_radius_target = self.corner_radius
         self.compact_corner_radius = config.get('compact_corner_radius', 20)
-        self.compact_corner_radius_target = self.compact_corner_radius  # Устанавливаем target для плавной анимации
+        self.compact_corner_radius_target = self.compact_corner_radius
         self.click_to_open_app = config.get('click_to_open_app', True)
         self.long_press_duration = config.get('long_press_duration', 250)
         self.show_time_remaining = config.get('show_time_remaining', True)
@@ -1392,27 +1355,23 @@ class DynamicIsland(QWidget):
         self.autohide = config.get('autohide', False)
         self.monitor_index = config.get('monitor', 0)
         
-        # Применяем autohide сразу
         if self.autohide and not self.has_media_session and not self.is_hidden:
             self.hide_island()
         elif not self.autohide and self.is_hidden:
             self.show_island()
         
-        # Размер острова (scale применяется только к compact)
         scale = config.get('size_scale', 100) / 100.0
         idle_width = config.get('idle_width', 150)
         media_width = config.get('media_width', 200)
         self.base_width = int(idle_width * scale)
         self.base_height = int(40 * scale)
-        self.expanded_width = 330  # Фиксированный размер плеера
+        self.expanded_width = 330
         self.expanded_height = 200
         self.media_width = int(media_width * scale)
         
-        # Применяем прозрачность
         opacity = config.get('opacity', 100) / 100.0
         self.setWindowOpacity(opacity)
         
-        # Обновляем анимацию
         base_duration = 350
         self.animation.setDuration(int(base_duration / self.animation_speed))
         if self.bounce_enabled:
@@ -1420,7 +1379,6 @@ class DynamicIsland(QWidget):
         else:
             self.animation.setEasingCurve(QEasingCurve.OutCubic)
         
-        # Обновляем позицию
         if not self.is_expanded:
             target_w = self.media_width if (self.is_media_playing or self.has_media_session) else self.base_width
             self.animate_to(target_w, self.base_height)
@@ -1450,13 +1408,12 @@ class HoverZone(QWidget):
         painter.drawRect(self.rect())
 
 
-# Путь к конфигу
 CONFIG_DIR = os.path.join(os.environ.get('APPDATA', ''), 'WindowsIsland')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
 
 DEFAULT_CONFIG = {
-    'language': 'en',  # Английский по умолчанию
-    'autostart': True,  # Включён по умолчанию
+    'language': 'en',
+    'autostart': True,
     'topmost': True,
     'autohide': False,
     'top_offset': 15,
@@ -1470,18 +1427,18 @@ DEFAULT_CONFIG = {
     'animation_speed': 100,
     'bounce_effect': True,
     'text_animation': True,
-    'text_animation_style': 3,  # 0=slide, 1=fade, 2=typewriter, 3=wave, 4=blur (волна по умолчанию)
+    'text_animation_style': 3,
     'button_animation': True,
     'flip_animation': True,
     'click_to_open_app': True,
     'long_press_duration': 250,
     'show_time_remaining': True,
-    'compact_corner_radius': 20,  # Закругление в обычном режиме
-    'double_click_action': 2,  # 0=nothing, 1=expand, 2=play/pause, 3=next (play/pause по умолчанию)
-    'show_progress_bar': False,  # Выключен по умолчанию
-    'idle_width': 150,  # Ширина без медиа
-    'media_width': 200,  # Ширина с медиа (1.5x от idle)
-    'eq_sensitivity': 100  # Чувствительность эквалайзера (50-200%)
+    'compact_corner_radius': 20,
+    'double_click_action': 2,
+    'show_progress_bar': False,
+    'idle_width': 150,
+    'media_width': 200,
+    'eq_sensitivity': 100
 }
 
 TRANSLATIONS = {
@@ -1601,7 +1558,6 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-                # Добавляем недостающие ключи
                 for key, value in DEFAULT_CONFIG.items():
                     if key not in config:
                         config[key] = value
@@ -1619,37 +1575,32 @@ def save_config(config):
 
 
 def set_autostart(enabled):
-    """Добавить/удалить из автозапуска Windows через Task Scheduler (быстрый запуск)"""
     import subprocess
     task_name = "WindowsIsland"
     
     try:
         if enabled:
-            # Получаем путь к текущему скрипту
             if getattr(sys, 'frozen', False):
                 app_path = sys.executable
             else:
                 app_path = f'"{sys.executable}" "{os.path.abspath(__file__)}"'
             
-            # Удаляем старую задачу если есть
             subprocess.run(
                 ['schtasks', '/delete', '/tn', task_name, '/f'],
                 capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
             )
             
-            # Создаём задачу с триггером на вход в систему (без задержки)
             result = subprocess.run([
                 'schtasks', '/create',
                 '/tn', task_name,
                 '/tr', app_path,
-                '/sc', 'onlogon',  # При входе в систему
-                '/rl', 'limited',  # Обычные права
-                '/f'  # Перезаписать если существует
+                '/sc', 'onlogon',
+                '/rl', 'limited',
+                '/f'
             ], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             
             return result.returncode == 0
         else:
-            # Удаляем задачу
             result = subprocess.run(
                 ['schtasks', '/delete', '/tn', task_name, '/f'],
                 capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
@@ -1661,7 +1612,6 @@ def set_autostart(enabled):
 
 
 def is_autostart_enabled():
-    """Проверить, включён ли автозапуск через Task Scheduler"""
     import subprocess
     task_name = "WindowsIsland"
     
@@ -1830,7 +1780,6 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 
 
 class SmoothScrollArea(QScrollArea):
-    """QScrollArea с плавным скроллом"""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWidgetResizable(True)
@@ -1838,7 +1787,6 @@ class SmoothScrollArea(QScrollArea):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setFrameShape(QFrame.NoFrame)
         
-        # Стиль скроллбара - простой серый
         self.setStyleSheet("""
             QScrollArea {
                 background-color: transparent;
@@ -1865,33 +1813,27 @@ class SmoothScrollArea(QScrollArea):
             }
         """)
         
-        # Плавный скролл
         self._scroll_animation = QPropertyAnimation(self.verticalScrollBar(), b"value")
         self._scroll_animation.setEasingCurve(QEasingCurve.OutCubic)
         self._scroll_animation.setDuration(300)
         
-        # Включаем touch scrolling
         QScroller.grabGesture(self.viewport(), QScroller.LeftMouseButtonGesture)
         scroller = QScroller.scroller(self.viewport())
         props = scroller.scrollerProperties()
-        # Используем числовые значения вместо enum
-        props.setScrollMetric(1, 0.3)  # DecelerationFactor
-        props.setScrollMetric(7, 0.3)  # OvershootDragResistanceFactor
+        props.setScrollMetric(1, 0.3)
+        props.setScrollMetric(7, 0.3)
         scroller.setScrollerProperties(props)
     
     def wheelEvent(self, event):
-        # Плавный скролл при прокрутке колёсиком
         delta = event.angleDelta().y()
         current = self.verticalScrollBar().value()
         
-        # Если анимация уже идёт, берём её конечное значение
         if self._scroll_animation.state() == QPropertyAnimation.Running:
             current = self._scroll_animation.endValue()
         
-        step = 80  # Шаг скролла
+        step = 80
         target = current - (delta // 120) * step
         
-        # Ограничиваем значение
         target = max(0, min(target, self.verticalScrollBar().maximum()))
         
         self._scroll_animation.stop()
@@ -1920,7 +1862,6 @@ class SettingsWindow(QWidget):
         self.dragging = False
         self.drag_pos = QPoint()
         
-        # Анимация появления
         self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
         self.fade_animation.setDuration(200)
         self.fade_animation.setEasingCurve(QEasingCurve.OutCubic)
@@ -1948,14 +1889,12 @@ class SettingsWindow(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Контейнер с закруглёнными углами
         container = QFrame()
         container.setStyleSheet("QFrame { background-color: #1a1a1a; border-radius: 16px; }")
         self.container_layout = QVBoxLayout(container)
         self.container_layout.setContentsMargins(20, 20, 20, 20)
         self.container_layout.setSpacing(15)
         
-        # Заголовок
         header = QHBoxLayout()
         self.title_label = QLabel(self.tr['title'])
         self.title_label.setObjectName("title")
@@ -1984,13 +1923,11 @@ class SettingsWindow(QWidget):
         self.subtitle_label.setObjectName("subtitle")
         self.container_layout.addWidget(self.subtitle_label)
         
-        # Разделитель
         sep = QFrame()
         sep.setObjectName("separator")
         sep.setFrameShape(QFrame.HLine)
         self.container_layout.addWidget(sep)
         
-        # Вкладки
         self.tabs = QTabWidget()
         self.tabs.addTab(self.create_general_tab(), self.tr['tab_general'])
         self.tabs.addTab(self.create_appearance_tab(), self.tr['tab_appearance'])
@@ -1998,7 +1935,6 @@ class SettingsWindow(QWidget):
         self.tabs.addTab(self.create_about_tab(), self.tr['tab_about'])
         self.container_layout.addWidget(self.tabs)
         
-        # Кнопки внизу
         btn_layout = QHBoxLayout()
         self.reset_btn = QPushButton(self.tr['reset'])
         self.reset_btn.setObjectName("secondary")
@@ -2024,7 +1960,6 @@ class SettingsWindow(QWidget):
         layout.setSpacing(15)
         layout.setContentsMargins(5, 5, 15, 5)
         
-        # Язык
         lang_layout = QHBoxLayout()
         self.lang_label = QLabel(self.tr['language'])
         lang_layout.addWidget(self.lang_label)
@@ -2036,23 +1971,18 @@ class SettingsWindow(QWidget):
         lang_layout.addStretch()
         layout.addLayout(lang_layout)
         
-        # Автозапуск
         self.autostart_check = QCheckBox(self.tr['autostart'])
-        # Проверяем реальное состояние автозапуска
         self.autostart_check.setChecked(is_autostart_enabled())
         layout.addWidget(self.autostart_check)
         
-        # Поверх всех окон
         self.topmost_check = QCheckBox(self.tr['topmost'])
         self.topmost_check.setChecked(self.config['topmost'])
         layout.addWidget(self.topmost_check)
         
-        # Скрывать при неактивности
         self.autohide_check = QCheckBox(self.tr['autohide'])
         self.autohide_check.setChecked(self.config['autohide'])
         layout.addWidget(self.autohide_check)
         
-        # Позиция
         pos_layout = QHBoxLayout()
         self.top_offset_label = QLabel(self.tr['top_offset'])
         pos_layout.addWidget(self.top_offset_label)
@@ -2064,7 +1994,6 @@ class SettingsWindow(QWidget):
         pos_layout.addStretch()
         layout.addLayout(pos_layout)
         
-        # Монитор
         monitor_layout = QHBoxLayout()
         self.monitor_label = QLabel(self.tr['monitor'])
         monitor_layout.addWidget(self.monitor_label)
@@ -2080,7 +2009,6 @@ class SettingsWindow(QWidget):
         monitor_layout.addStretch()
         layout.addLayout(monitor_layout)
         
-        # Двойной клик
         dc_layout = QHBoxLayout()
         self.dc_label = QLabel(self.tr['double_click'])
         dc_layout.addWidget(self.dc_label)
@@ -2091,17 +2019,14 @@ class SettingsWindow(QWidget):
         dc_layout.addStretch()
         layout.addLayout(dc_layout)
         
-        # Прогресс в compact режиме
         self.show_progress_check = QCheckBox(self.tr['show_progress'])
         self.show_progress_check.setChecked(self.config.get('show_progress_bar', True))
         layout.addWidget(self.show_progress_check)
         
-        # Клик открывает приложение
         self.click_app_check = QCheckBox(self.tr['click_open_app'])
         self.click_app_check.setChecked(self.config['click_to_open_app'])
         layout.addWidget(self.click_app_check)
         
-        # Длительность зажатия
         press_layout = QHBoxLayout()
         self.long_press_label = QLabel(self.tr['long_press'])
         press_layout.addWidget(self.long_press_label)
@@ -2113,7 +2038,6 @@ class SettingsWindow(QWidget):
         press_layout.addStretch()
         layout.addLayout(press_layout)
         
-        # Показывать оставшееся время
         self.show_remaining_check = QCheckBox(self.tr['show_remaining'])
         self.show_remaining_check.setChecked(self.config['show_time_remaining'])
         layout.addWidget(self.show_remaining_check)
@@ -2125,7 +2049,6 @@ class SettingsWindow(QWidget):
     def on_language_changed(self, index):
         self.config['language'] = 'ru' if index == 0 else 'en'
         self.tr = TRANSLATIONS[self.config['language']]
-        # Обновляем UI
         self.update_ui_language()
     
     def create_appearance_tab(self):
@@ -2138,7 +2061,6 @@ class SettingsWindow(QWidget):
         layout.setContentsMargins(5, 5, 15, 5)
         layout.setSpacing(15)
         
-        # Размер острова
         size_layout = QHBoxLayout()
         self.size_lbl = QLabel(self.tr['size'])
         size_layout.addWidget(self.size_lbl)
@@ -2151,7 +2073,6 @@ class SettingsWindow(QWidget):
         self.size_slider.valueChanged.connect(lambda v: self.size_label.setText(f"{v}%"))
         layout.addLayout(size_layout)
         
-        # Ширина без медиа
         idle_width_layout = QHBoxLayout()
         self.idle_width_lbl = QLabel(self.tr['idle_width'])
         idle_width_layout.addWidget(self.idle_width_lbl)
@@ -2163,7 +2084,6 @@ class SettingsWindow(QWidget):
         idle_width_layout.addStretch()
         layout.addLayout(idle_width_layout)
         
-        # Ширина с медиа
         media_width_layout = QHBoxLayout()
         self.media_width_lbl = QLabel(self.tr['media_width'])
         media_width_layout.addWidget(self.media_width_lbl)
@@ -2175,7 +2095,6 @@ class SettingsWindow(QWidget):
         media_width_layout.addStretch()
         layout.addLayout(media_width_layout)
         
-        # Прозрачность
         opacity_layout = QHBoxLayout()
         self.opacity_lbl = QLabel(self.tr['opacity'])
         opacity_layout.addWidget(self.opacity_lbl)
@@ -2188,7 +2107,6 @@ class SettingsWindow(QWidget):
         self.opacity_slider.valueChanged.connect(lambda v: self.opacity_label.setText(f"{v}%"))
         layout.addLayout(opacity_layout)
         
-        # Радиус закругления (expanded)
         radius_layout = QHBoxLayout()
         self.radius_lbl = QLabel(self.tr['corner_radius'])
         radius_layout.addWidget(self.radius_lbl)
@@ -2201,7 +2119,6 @@ class SettingsWindow(QWidget):
         self.radius_slider.valueChanged.connect(lambda v: self.radius_label.setText(f"{v} px"))
         layout.addLayout(radius_layout)
         
-        # Радиус закругления (compact)
         compact_radius_layout = QHBoxLayout()
         self.compact_radius_lbl = QLabel(self.tr['compact_radius'])
         compact_radius_layout.addWidget(self.compact_radius_lbl)
@@ -2214,17 +2131,14 @@ class SettingsWindow(QWidget):
         self.compact_radius_slider.valueChanged.connect(lambda v: self.compact_radius_label.setText(f"{v} px"))
         layout.addLayout(compact_radius_layout)
         
-        # Показывать эквалайзер
         self.eq_check = QCheckBox(self.tr['show_eq'])
         self.eq_check.setChecked(self.config['show_equalizer'])
         layout.addWidget(self.eq_check)
         
-        # Цветной эквалайзер
         self.eq_color_check = QCheckBox(self.tr['eq_color'])
         self.eq_color_check.setChecked(self.config['eq_color_from_art'])
         layout.addWidget(self.eq_color_check)
         
-        # Количество полосок эквалайзера
         eq_bars_layout = QHBoxLayout()
         self.eq_bars_lbl = QLabel(self.tr['eq_bars'])
         eq_bars_layout.addWidget(self.eq_bars_lbl)
@@ -2235,7 +2149,6 @@ class SettingsWindow(QWidget):
         eq_bars_layout.addStretch()
         layout.addLayout(eq_bars_layout)
         
-        # Чувствительность эквалайзера
         eq_sens_layout = QHBoxLayout()
         self.eq_sens_lbl = QLabel(self.tr['eq_sensitivity'])
         eq_sens_layout.addWidget(self.eq_sens_lbl)
@@ -2262,7 +2175,6 @@ class SettingsWindow(QWidget):
         layout.setSpacing(15)
         layout.setContentsMargins(5, 5, 15, 5)
         
-        # Скорость анимации
         speed_layout = QHBoxLayout()
         self.speed_lbl = QLabel(self.tr['anim_speed'])
         speed_layout.addWidget(self.speed_lbl)
@@ -2275,17 +2187,14 @@ class SettingsWindow(QWidget):
         self.speed_slider.valueChanged.connect(lambda v: self.speed_label.setText(f"{v}%"))
         layout.addLayout(speed_layout)
         
-        # Эффект отскока
         self.bounce_check = QCheckBox(self.tr['bounce'])
         self.bounce_check.setChecked(self.config['bounce_effect'])
         layout.addWidget(self.bounce_check)
         
-        # Анимация текста
         self.text_anim_check = QCheckBox(self.tr['text_anim'])
         self.text_anim_check.setChecked(self.config['text_animation'])
         layout.addWidget(self.text_anim_check)
         
-        # Стиль анимации текста
         text_style_layout = QHBoxLayout()
         self.text_anim_style_lbl = QLabel(self.tr['text_anim_style'])
         text_style_layout.addWidget(self.text_anim_style_lbl)
@@ -2302,12 +2211,10 @@ class SettingsWindow(QWidget):
         text_style_layout.addStretch()
         layout.addLayout(text_style_layout)
         
-        # Анимация кнопок
         self.btn_anim_check = QCheckBox(self.tr['btn_anim'])
         self.btn_anim_check.setChecked(self.config['button_animation'])
         layout.addWidget(self.btn_anim_check)
         
-        # Flip анимация обложки
         self.flip_check = QCheckBox(self.tr['flip_anim'])
         self.flip_check.setChecked(self.config['flip_animation'])
         layout.addWidget(self.flip_check)
@@ -2327,7 +2234,6 @@ class SettingsWindow(QWidget):
         layout.setContentsMargins(5, 5, 15, 5)
         layout.setAlignment(Qt.AlignCenter)
         
-        # Иконка/лого
         logo = QLabel("🏝️")
         logo.setStyleSheet("font-size: 48px;")
         logo.setAlignment(Qt.AlignCenter)
@@ -2352,7 +2258,6 @@ class SettingsWindow(QWidget):
         
         layout.addSpacing(10)
         
-        # Автор
         self.about_author = QLabel(self.tr['author'])
         self.about_author.setStyleSheet("color: #666666; font-size: 11px;")
         self.about_author.setAlignment(Qt.AlignCenter)
@@ -2360,7 +2265,6 @@ class SettingsWindow(QWidget):
         
         layout.addSpacing(20)
         
-        # Кнопка GitHub
         btn_layout = QHBoxLayout()
         btn_layout.setAlignment(Qt.AlignCenter)
         
@@ -2377,7 +2281,6 @@ class SettingsWindow(QWidget):
     
     def update_ui_language(self):
         self.tr = TRANSLATIONS[self.config['language']]
-        # Заголовки
         self.title_label.setText(self.tr['title'])
         self.subtitle_label.setText(self.tr['subtitle'])
         self.tabs.setTabText(0, self.tr['tab_general'])
@@ -2387,24 +2290,20 @@ class SettingsWindow(QWidget):
         self.reset_btn.setText(self.tr['reset'])
         self.save_btn.setText(self.tr['save'])
         
-        # General tab - чекбоксы
         self.autostart_check.setText(self.tr['autostart'])
         self.topmost_check.setText(self.tr['topmost'])
         self.autohide_check.setText(self.tr['autohide'])
         self.click_app_check.setText(self.tr['click_open_app'])
         self.show_remaining_check.setText(self.tr['show_remaining'])
         self.show_progress_check.setText(self.tr['show_progress'])
-        # General tab - лейблы
         self.lang_label.setText(self.tr['language'])
         self.top_offset_label.setText(self.tr['top_offset'])
         self.monitor_label.setText(self.tr['monitor'])
         self.dc_label.setText(self.tr['double_click'])
         self.long_press_label.setText(self.tr['long_press'])
         
-        # Appearance tab - чекбоксы
         self.eq_check.setText(self.tr['show_eq'])
         self.eq_color_check.setText(self.tr['eq_color'])
-        # Appearance tab - лейблы
         self.size_lbl.setText(self.tr['size'])
         self.idle_width_lbl.setText(self.tr['idle_width'])
         self.media_width_lbl.setText(self.tr['media_width'])
@@ -2414,16 +2313,13 @@ class SettingsWindow(QWidget):
         self.eq_bars_lbl.setText(self.tr['eq_bars'])
         self.eq_sens_lbl.setText(self.tr['eq_sensitivity'])
         
-        # Animation tab - чекбоксы
         self.bounce_check.setText(self.tr['bounce'])
         self.text_anim_check.setText(self.tr['text_anim'])
         self.btn_anim_check.setText(self.tr['btn_anim'])
         self.flip_check.setText(self.tr['flip_anim'])
-        # Animation tab - лейблы
         self.speed_lbl.setText(self.tr['anim_speed'])
         self.text_anim_style_lbl.setText(self.tr['text_anim_style'])
         
-        # Обновляем комбобоксы
         current_dc = self.double_click_combo.currentIndex()
         self.double_click_combo.clear()
         self.double_click_combo.addItems([self.tr['dc_none'], self.tr['dc_expand'], self.tr['dc_playpause'], self.tr['dc_next']])
@@ -2440,7 +2336,6 @@ class SettingsWindow(QWidget):
         ])
         self.text_anim_style_combo.setCurrentIndex(current_anim)
         
-        # Обновляем монитор комбобокс
         current_monitor = self.monitor_combo.currentIndex()
         self.monitor_combo.clear()
         screens = QApplication.screens()
@@ -2450,7 +2345,6 @@ class SettingsWindow(QWidget):
             self.monitor_combo.addItem(f"{name} ({geo.width()}x{geo.height()})")
         self.monitor_combo.setCurrentIndex(current_monitor)
         
-        # About tab
         self.about_name.setText(self.tr['title'])
         self.about_version.setText(f"{self.tr['version']} 1.0.0")
         self.about_desc.setText(self.tr['description'])
@@ -2487,7 +2381,6 @@ class SettingsWindow(QWidget):
         
         save_config(self.config)
         
-        # Применяем автозапуск
         set_autostart(self.config['autostart'])
         
         self.settings_changed.emit(self.config)
@@ -2552,7 +2445,6 @@ class TrayIcon(QSystemTrayIcon):
         self.settings_window = settings_window
         self.tr = settings_window.tr
         
-        # Создаём простую иконку
         pixmap = QPixmap(32, 32)
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
@@ -2624,6 +2516,16 @@ class TrayIcon(QSystemTrayIcon):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    
+    font_files = [
+        "SFPRODISPLAYREGULAR.OTF",
+        "SFPRODISPLAYBOLD.OTF",
+        "SFPRODISPLAYMEDIUM.OTF"
+    ]
+    for font_file in font_files:
+        font_path = resource_path(font_file)
+        if os.path.exists(font_path):
+            QFontDatabase.addApplicationFont(font_path)
     
     island = DynamicIsland()
     island.show()
