@@ -1583,13 +1583,11 @@ TRANSLATIONS = {
 
 
 def get_startup_folder():
-    """Получить путь к папке автозагрузки"""
     return os.path.join(os.environ.get('APPDATA', ''), 
                         'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
 
 
 def get_shortcut_path():
-    """Путь к ярлыку в автозагрузке"""
     return os.path.join(get_startup_folder(), 'WindowsIsland.lnk')
 
 
@@ -2268,7 +2266,7 @@ class SettingsWindow(QWidget):
         self.about_name.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.about_name)
         
-        self.about_version = QLabel(f"{self.tr['version']} 1.0.0")
+        self.about_version = QLabel(f"{self.tr['version']} 1.0.1")
         self.about_version.setStyleSheet("color: #888888;")
         self.about_version.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.about_version)
@@ -2370,7 +2368,7 @@ class SettingsWindow(QWidget):
         self.monitor_combo.setCurrentIndex(current_monitor)
         
         self.about_name.setText(self.tr['title'])
-        self.about_version.setText(f"{self.tr['version']} 1.0.0")
+        self.about_version.setText(f"{self.tr['version']} 1.0.1")
         self.about_desc.setText(self.tr['description'])
         self.about_author.setText(self.tr['author'])
     
@@ -2410,7 +2408,6 @@ class SettingsWindow(QWidget):
         self.settings_changed.emit(self.config)
     
     def reload_ui_values(self):
-        """Обновляет все UI элементы из текущего конфига"""
         self.lang_combo.setCurrentIndex(0 if self.config['language'] == 'ru' else 1)
         self.autostart_check.setChecked(self.config['autostart'])
         self.topmost_check.setChecked(self.config['topmost'])
