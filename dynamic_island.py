@@ -37,6 +37,70 @@ except ImportError:
     AUDIO_AVAILABLE = False
 
 
+CONFIG_DIR = os.path.join(os.environ.get('APPDATA', ''), 'WindowsIsland')
+CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
+
+DEFAULT_CONFIG = {
+    'language': 'en',
+    'autostart': True,
+    'topmost': True,
+    'autohide': False,
+    'top_offset': 15,
+    'monitor': 0,
+    'size_scale': 100,
+    'opacity': 100,
+    'corner_radius': 20,
+    'show_equalizer': True,
+    'eq_color_from_art': True,
+    'eq_bar_count': 6,
+    'animation_speed': 100,
+    'bounce_effect': True,
+    'text_animation': True,
+    'text_animation_style': 3,
+    'button_animation': True,
+    'flip_animation': True,
+    'click_to_open_app': True,
+    'long_press_duration': 250,
+    'show_time_remaining': True,
+    'compact_corner_radius': 20,
+    'double_click_action': 2,
+    'show_progress_bar': False,
+    'idle_width': 150,
+    'media_width': 200,
+    'eq_sensitivity': 100
+}
+
+
+def load_config():
+    try:
+        if not os.path.exists(CONFIG_DIR):
+            os.makedirs(CONFIG_DIR)
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                for key, value in DEFAULT_CONFIG.items():
+                    if key not in config:
+                        config[key] = value
+                return config
+    except Exception as e:
+        print(f"Error loading config: {e}")
+    return DEFAULT_CONFIG.copy()
+
+
+def save_config(config):
+    try:
+        if not os.path.exists(CONFIG_DIR):
+            os.makedirs(CONFIG_DIR)
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        return True
+    except Exception as e:
+        print(f"Error saving config: {e}")
+        return False
+
+
 class AudioAnalyzer:
     def __init__(self):
         self.p = None
@@ -1408,39 +1472,6 @@ class HoverZone(QWidget):
         painter.drawRect(self.rect())
 
 
-CONFIG_DIR = os.path.join(os.environ.get('APPDATA', ''), 'WindowsIsland')
-CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
-
-DEFAULT_CONFIG = {
-    'language': 'en',
-    'autostart': True,
-    'topmost': True,
-    'autohide': False,
-    'top_offset': 15,
-    'monitor': 0,
-    'size_scale': 100,
-    'opacity': 100,
-    'corner_radius': 20,
-    'show_equalizer': True,
-    'eq_color_from_art': True,
-    'eq_bar_count': 6,
-    'animation_speed': 100,
-    'bounce_effect': True,
-    'text_animation': True,
-    'text_animation_style': 3,
-    'button_animation': True,
-    'flip_animation': True,
-    'click_to_open_app': True,
-    'long_press_duration': 250,
-    'show_time_remaining': True,
-    'compact_corner_radius': 20,
-    'double_click_action': 2,
-    'show_progress_bar': False,
-    'idle_width': 150,
-    'media_width': 200,
-    'eq_sensitivity': 100
-}
-
 TRANSLATIONS = {
     'ru': {
         'title': 'Windows Island',
@@ -1551,78 +1582,62 @@ TRANSLATIONS = {
 }
 
 
-def load_config():
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR)
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                for key, value in DEFAULT_CONFIG.items():
-                    if key not in config:
-                        config[key] = value
-                return config
-        except:
-            pass
-    return DEFAULT_CONFIG.copy()
+def get_startup_folder():
+    """Получить путь к папке автозагрузки"""
+    return os.path.join(os.environ.get('APPDATA', ''), 
+                        'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
 
 
-def save_config(config):
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR)
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+def get_shortcut_path():
+    """Путь к ярлыку в автозагрузке"""
+    return os.path.join(get_startup_folder(), 'WindowsIsland.lnk')
 
 
 def set_autostart(enabled):
-    import subprocess
-    task_name = "WindowsIsland"
-    
     try:
+        shortcut_path = get_shortcut_path()
+        
+        if os.path.exists(shortcut_path):
+            os.remove(shortcut_path)
+        
         if enabled:
             if getattr(sys, 'frozen', False):
-                app_path = sys.executable
+                target = sys.executable
             else:
-                app_path = f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+                pythonw = sys.executable.replace('python.exe', 'pythonw.exe')
+                if not os.path.exists(pythonw):
+                    pythonw = sys.executable
+                target = pythonw
             
-            subprocess.run(
-                ['schtasks', '/delete', '/tn', task_name, '/f'],
-                capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
-            )
+            import subprocess
+            script_path = os.path.abspath(__file__) if not getattr(sys, 'frozen', False) else ""
             
-            result = subprocess.run([
-                'schtasks', '/create',
-                '/tn', task_name,
-                '/tr', app_path,
-                '/sc', 'onlogon',
-                '/rl', 'limited',
-                '/f'
-            ], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            ps_script = f'''
+$WshShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
+$Shortcut.TargetPath = "{target}"
+'''
+            if script_path:
+                ps_script += f'$Shortcut.Arguments = "\\"{script_path}\\""\n'
             
-            return result.returncode == 0
-        else:
+            ps_script += '''$Shortcut.WorkingDirectory = $Shortcut.TargetPath | Split-Path
+$Shortcut.Save()
+'''
+            
             result = subprocess.run(
-                ['schtasks', '/delete', '/tn', task_name, '/f'],
-                capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
+                ['powershell', '-Command', ps_script],
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
-            return True
+            return result.returncode == 0
+        return True
     except Exception as e:
-        print(f"Ошибка автозапуска: {e}")
+        print(f"Autostart error: {e}")
         return False
 
 
 def is_autostart_enabled():
-    import subprocess
-    task_name = "WindowsIsland"
-    
-    try:
-        result = subprocess.run(
-            ['schtasks', '/query', '/tn', task_name],
-            capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
-        )
-        return result.returncode == 0
-    except:
-        return False
+    return os.path.exists(get_shortcut_path())
 
 
 SETTINGS_STYLE = """
@@ -1870,20 +1885,29 @@ class SettingsWindow(QWidget):
     
     def showEvent(self, event):
         super().showEvent(event)
+        self.config = load_config()
+        self.reload_ui_values()
         self.setWindowOpacity(0)
         self.fade_animation.setStartValue(0)
         self.fade_animation.setEndValue(1)
         self.fade_animation.start()
     
     def hide_with_animation(self):
+        try:
+            self.fade_animation.finished.disconnect()
+        except:
+            pass
         self.fade_animation.setStartValue(1)
         self.fade_animation.setEndValue(0)
         self.fade_animation.finished.connect(self._do_hide)
         self.fade_animation.start()
     
     def _do_hide(self):
-        self.fade_animation.finished.disconnect(self._do_hide)
-        super().hide()
+        try:
+            self.fade_animation.finished.disconnect(self._do_hide)
+        except:
+            pass
+        self.hide()
     
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -2385,8 +2409,8 @@ class SettingsWindow(QWidget):
         
         self.settings_changed.emit(self.config)
     
-    def reset_settings(self):
-        self.config = DEFAULT_CONFIG.copy()
+    def reload_ui_values(self):
+        """Обновляет все UI элементы из текущего конфига"""
         self.lang_combo.setCurrentIndex(0 if self.config['language'] == 'ru' else 1)
         self.autostart_check.setChecked(self.config['autostart'])
         self.topmost_check.setChecked(self.config['topmost'])
@@ -2414,7 +2438,12 @@ class SettingsWindow(QWidget):
         self.text_anim_style_combo.setCurrentIndex(self.config['text_animation_style'])
         self.btn_anim_check.setChecked(self.config['button_animation'])
         self.flip_check.setChecked(self.config['flip_animation'])
+        self.tr = TRANSLATIONS[self.config['language']]
         self.update_ui_language()
+    
+    def reset_settings(self):
+        self.config = DEFAULT_CONFIG.copy()
+        self.reload_ui_values()
     
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -2436,6 +2465,10 @@ class SettingsWindow(QWidget):
         painter.setBrush(QColor(26, 26, 26))
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(self.rect(), 16, 16)
+    
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide_with_animation()
 
 
 class TrayIcon(QSystemTrayIcon):
