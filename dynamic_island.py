@@ -67,7 +67,8 @@ DEFAULT_CONFIG = {
     'show_progress_bar': False,
     'idle_width': 150,
     'media_width': 200,
-    'eq_sensitivity': 100
+    'eq_sensitivity': 100,
+    'show_mic_indicator': True
 }
 
 
@@ -274,6 +275,11 @@ class DynamicIsland(QWidget):
         self.has_media_session = False
         self.pause_progress = 1.0
         
+        self.mic_active = False
+        self.mic_dot_opacity = 0.0
+        self.mic_dot_target = 0.0
+        self.mic_last_state = False
+        self.mic_state_count = 0
 
         self.play_pause_scale = 1.0
         self.play_pause_animating = False
@@ -323,6 +329,9 @@ class DynamicIsland(QWidget):
         self.flip_timer = QTimer()
         self.flip_timer.timeout.connect(self.update_flip)
         self.flip_timer.start(16)
+        self.mic_timer = QTimer()
+        self.mic_timer.timeout.connect(self.check_microphone)
+        self.mic_timer.start(100)
     
     def _animate_startup(self):
         if self._startup_animation_done:
@@ -360,6 +369,16 @@ class DynamicIsland(QWidget):
         painter.drawRoundedRect(self.rect(), radius, radius)
         
         self.draw_interpolated(painter, progress)
+        
+        if self.mic_dot_opacity > 0.01 and progress < 0.3 and self.config.get('show_mic_indicator', True):
+            painter.setOpacity(self.mic_dot_opacity * (1.0 - progress / 0.3))
+            painter.setBrush(QBrush(QColor(255, 149, 0)))
+            painter.setPen(Qt.NoPen)
+            dot_size = 8
+            dot_x = w / 2 + 22
+            dot_y = h / 2 - dot_size / 2
+            painter.drawEllipse(int(dot_x), int(dot_y), dot_size, dot_size)
+            painter.setOpacity(1.0)
 
     def lerp(self, a, b, t):
         return a + (b - a) * t
@@ -878,6 +897,17 @@ class DynamicIsland(QWidget):
         self.corner_radius_current += (self.corner_radius_target - self.corner_radius_current) * 0.15
         self.compact_corner_radius_current += (self.compact_corner_radius_target - self.compact_corner_radius_current) * 0.15
         
+        new_target = 1.0 if self.mic_active else 0.0
+        if new_target != self.mic_dot_target:
+            self.mic_dot_target = new_target
+        diff = self.mic_dot_target - self.mic_dot_opacity
+        if abs(diff) > 0.001:
+            step = 0.20 if diff > 0 else -0.20
+            self.mic_dot_opacity += step
+            self.mic_dot_opacity = max(0.0, min(1.0, self.mic_dot_opacity))
+        else:
+            self.mic_dot_opacity = self.mic_dot_target
+        
         if self.is_media_playing:
             bands = self.audio_analyzer.get_bands()
             sensitivity = self.eq_sensitivity / 100.0
@@ -942,7 +972,7 @@ class DynamicIsland(QWidget):
             self.artist_scrolling = False
             self.scroll_pause_start = 0
         
-        if self.has_media_session or self.is_media_playing:
+        if self.has_media_session or self.is_media_playing or self.mic_dot_opacity > 0.001 or self.mic_active:
             self.update()
 
     def update_flip(self):
@@ -965,6 +995,38 @@ class DynamicIsland(QWidget):
         self.new_eq_colors = new_colors
         self.flip_angle = 0
         self.flip_animating = True
+
+    def check_microphone(self):
+        try:
+            key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\NonPackaged"
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path)
+            mic_in_use = False
+            i = 0
+            while True:
+                try:
+                    subkey_name = winreg.EnumKey(key, i)
+                    subkey = winreg.OpenKey(key, subkey_name)
+                    try:
+                        stop_time, _ = winreg.QueryValueEx(subkey, "LastUsedTimeStop")
+                        if stop_time == 0:
+                            mic_in_use = True
+                            break
+                    except:
+                        pass
+                    winreg.CloseKey(subkey)
+                    i += 1
+                except OSError:
+                    break
+            winreg.CloseKey(key)
+            if mic_in_use == self.mic_last_state:
+                self.mic_state_count += 1
+            else:
+                self.mic_state_count = 0
+                self.mic_last_state = mic_in_use
+            if self.mic_state_count >= 2:
+                self.mic_active = mic_in_use
+        except:
+            pass
 
     def get_current_width(self):
         return self.media_width if (self.is_media_playing or self.has_media_session) else self.base_width
@@ -1514,6 +1576,7 @@ TRANSLATIONS = {
         'dc_playpause': 'Play/Pause',
         'dc_next': 'Следующий трек',
         'show_progress': 'Прогресс в compact режиме',
+        'show_mic': 'Индикатор микрофона',
         'idle_width': 'Ширина (без медиа):',
         'media_width': 'Ширина (с медиа):',
         'eq_sensitivity': 'Чувствительность эквалайзера:',
@@ -1567,6 +1630,7 @@ TRANSLATIONS = {
         'dc_playpause': 'Play/Pause',
         'dc_next': 'Next track',
         'show_progress': 'Progress in compact mode',
+        'show_mic': 'Microphone indicator',
         'idle_width': 'Width (no media):',
         'media_width': 'Width (with media):',
         'eq_sensitivity': 'Equalizer sensitivity:',
@@ -2045,6 +2109,10 @@ class SettingsWindow(QWidget):
         self.show_progress_check.setChecked(self.config.get('show_progress_bar', True))
         layout.addWidget(self.show_progress_check)
         
+        self.show_mic_check = QCheckBox(self.tr['show_mic'])
+        self.show_mic_check.setChecked(self.config.get('show_mic_indicator', True))
+        layout.addWidget(self.show_mic_check)
+        
         self.click_app_check = QCheckBox(self.tr['click_open_app'])
         self.click_app_check.setChecked(self.config['click_to_open_app'])
         layout.addWidget(self.click_app_check)
@@ -2266,7 +2334,7 @@ class SettingsWindow(QWidget):
         self.about_name.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.about_name)
         
-        self.about_version = QLabel(f"{self.tr['version']} 1.0.1")
+        self.about_version = QLabel(f"{self.tr['version']} 1.1.1")
         self.about_version.setStyleSheet("color: #888888;")
         self.about_version.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.about_version)
@@ -2368,7 +2436,7 @@ class SettingsWindow(QWidget):
         self.monitor_combo.setCurrentIndex(current_monitor)
         
         self.about_name.setText(self.tr['title'])
-        self.about_version.setText(f"{self.tr['version']} 1.0.1")
+        self.about_version.setText(f"{self.tr['version']} 1.1.1")
         self.about_desc.setText(self.tr['description'])
         self.about_author.setText(self.tr['author'])
     
@@ -2381,6 +2449,7 @@ class SettingsWindow(QWidget):
         self.config['monitor'] = self.monitor_combo.currentIndex()
         self.config['double_click_action'] = self.double_click_combo.currentIndex()
         self.config['show_progress_bar'] = self.show_progress_check.isChecked()
+        self.config['show_mic_indicator'] = self.show_mic_check.isChecked()
         self.config['click_to_open_app'] = self.click_app_check.isChecked()
         self.config['long_press_duration'] = self.long_press_spin.value()
         self.config['show_time_remaining'] = self.show_remaining_check.isChecked()
@@ -2416,6 +2485,7 @@ class SettingsWindow(QWidget):
         self.monitor_combo.setCurrentIndex(self.config['monitor'])
         self.double_click_combo.setCurrentIndex(self.config['double_click_action'])
         self.show_progress_check.setChecked(self.config['show_progress_bar'])
+        self.show_mic_check.setChecked(self.config.get('show_mic_indicator', True))
         self.click_app_check.setChecked(self.config['click_to_open_app'])
         self.long_press_spin.setValue(self.config['long_press_duration'])
         self.show_remaining_check.setChecked(self.config['show_time_remaining'])
