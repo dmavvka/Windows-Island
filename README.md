@@ -165,5 +165,7 @@ MIT License — use, modify, and distribute freely, even commercially.
 
 <p align="center">
   <sub>Made with ❤️ for Windows users who miss Dynamic Island</sub>
+</p>
+<p align="center">
   <sub>vibecoded</sub>
 </p>
